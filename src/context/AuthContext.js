@@ -1,44 +1,62 @@
 import { AsyncStorage } from 'react-native';
 import createDataContext from './createDataContext';
 import trackerApi from '../api/tracker';
-import tracker from '../api/tracker';
 import { navigate } from '../navigationRef';
 
 const authReducer = (state, action) => {
   switch(action.type){
+    case 'clear_error_message':
+      return { ...state, errorMessage: ''};
     case 'add_error':
-      return { ...state, errorMessage: action.payload }
-    case 'singup':
-      return { errorMessage: '', token: action.payload, }
+      return { ...state, errorMessage: action.payload };
+    case 'singin':
+      return { errorMessage: '', token: action.payload, };
+    case 'signout':
+      return { ...state, token: null }
     default:
       return state;
     }
+}
+
+const tryLocalSignin = dispatch => async () => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) {
+    dispatch({ type: 'signin', payload: token });
+    navigate('TrackList');
+  } else {
+    navigate('loginFlow');
+  }
+}
+
+const clearErrorMessage = dispatch => () => {
+  dispatch({ type: 'clear_error_message'});
 }
 
 const signup = dispatch => async ({ email, password }) => {
   try {
     const response = await trackerApi.post('/signup', { email, password });
     await AsyncStorage.setItem('token', response.data.token);
-    dispatch({ type: 'signup', payload: response.data.token });
+    dispatch({ type: 'signin', payload: response.data.token });
     navigate('TrackList')
   } catch (err) {
     dispatch({ type: 'add_error' , payload: 'Something went wrong with sign up'});
   };
 };
 
-const signin = dispatch => {
-  return ({ email, password }) => {
-    // make api request to sign in with email and password
-
-    // if we succeed, modify state to show we are authenticated
-
-    // display error if there is an issue signing-up
-  }
+const signin = dispatch => async ({ email, password }) => {
+  try {
+    const response = await trackerApi.post('/signin', { email, password });
+    await AsyncStorage.setItem('token', response.data.token);
+    dispatch({ type: 'signin', payload: response.data.token });
+    navigate('TrackList')
+  } catch (err) {
+    dispatch({ type: 'add_error' , payload: 'Something went wrong with sign in'});
+  };
 }
 
 const signout = dispatch => {
   return () => {
-    // sign the user out and modify state to show being signed out.
+    dispatch({ type: 'signout'})
   }
 }
 
@@ -47,7 +65,9 @@ export const { Provider, Context } = createDataContext(
   {
     signup,
     signin,
-    signout
+    signout,
+    clearErrorMessage,
+    tryLocalSignin,
   },
   {
     token: null,
